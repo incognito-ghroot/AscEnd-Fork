@@ -82,6 +82,7 @@ Func IrisFarm()
 EndFunc
 
 Func IrisPickup()
+    
     Local $lAgentArray = Item_GetItemArray()
     Local $maxitems = $lAgentArray[0]
     
@@ -95,23 +96,23 @@ Func IrisPickup()
         Local $lModelID = Item_GetItemInfoByPtr($aItemPtr, "ModelID")
         If $lModelID <> $GC_I_MODELID_RED_IRIS_FLOWER Then ContinueLoop
         
-        MoveTo(Agent_GetAgentInfo($aItemAgentID, "X"), Agent_GetAgentInfo($aItemAgentID, "Y"), 25)
-        
-        Sleep(250)
-        
-        Item_PickUpItem($aItemAgentID)
-        
-        Local $lDeadlock = TimerInit()
-        While Agent_GetAgentPtr($aItemAgentID) > 0
-            Sleep(100)
-            If TimerDiff($lDeadlock) > 5000 Then ExitLoop
-        WEnd
-        
-        LogInfo("Red Iris collected!")
-        Return True
+        If CanPickup($aItemPtr) Then
+            MoveTo(Agent_GetAgentInfo($aItemAgentID, "X"), Agent_GetAgentInfo($aItemAgentID, "Y"), 25)
+            Sleep(250)
+            Item_PickUpItem($aItemAgentID)
+            Local $lDeadlock = TimerInit()
+            While GetItemAgentExists($aItemAgentID)
+                Sleep(100)
+                If GetPartyDead() Then ExitLoop
+                If TimerDiff($lDeadlock) > 5000 Then ExitLoop
+            WEnd
+            
+            LogInfo("Red Iris collected!")
+            Return True
+        EndIf
     Next
     
-    LogWarn("No Red Iris nearby.")
+    LogWarn("Who needs a Red Iris anyway? Not I-ris.")
     Return False
 EndFunc
 

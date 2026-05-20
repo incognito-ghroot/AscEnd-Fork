@@ -24,17 +24,6 @@ Func GetDistance($aAgent1 = -1, $aAgent2 = -2)
     Return Sqrt((Agent_GetAgentInfo($aAgent1, "X") - Agent_GetAgentInfo($aAgent2, "X")) ^ 2 + (Agent_GetAgentInfo($aAgent1, "Y") - Agent_GetAgentInfo($aAgent2, "Y")) ^ 2)
 EndFunc   ;==>GetDistance
 
-Func CheckAreaRange($aX, $aY, $range)
-    $ret = False
-    $pX = Agent_GetAgentInfo(-2, "X")
-    $pY = Agent_GetAgentInfo(-2, "Y")
-
-    If ($pX < $aX + $range) And ($pX > $aX - $range) And ($pY < $aY + $range) And ($pY > $aY - $range) Then
-        $ret = True
-    EndIf
-    Return $ret
-EndFunc   ;==>CheckAreaRange
-
 Func CalculateAverageTime()
     Local $averagetime
     Local $timesum = 0
@@ -745,21 +734,8 @@ Func FightExFilter($AggroRange, $filterFunc = "EnemyFilter")
 EndFunc   ;==>FightExFilter
 
 Func GetPartyDead()
-    ; Party is dead, if player is dead and no more heroes have a rez skill or all heroes with rez skills are also dead
-    Local $heroID
-
-    ; Check, if all of those heroes are dead - if at least 1 is still alive not, return false
-    For $ii = 1 To UBound($heroNumberWithRez)
-        $heroID = Party_GetMyPartyHeroInfo($heroNumberWithRez[$ii-1], "AgentID")
-        If Not Agent_GetAgentInfo($heroID, "IsDead") Then Return False
-    Next
-
-    ; If those heroes are all dead, check if you as player are also dead
-    If Not GetIsDead(-2) Then Return False
-
-    ; If all area dead, return True
-    Return True
-EndFunc   ;==>GetPartyDead
+    Return GetIsDead(-2)
+EndFunc   ;==>GetPartyDead - This is just because, and thats a 'wrap.'
 
 Func SurvivorMode($Threshold = 65)
     If $Survivor = True Then
@@ -773,29 +749,6 @@ EndFunc   ;==> SurvivorMode
 Func GetMyHP()
     Return Agent_GetAgentInfo(-2, "HPPercent")
 EndFunc   ;==> GetMyHP
-
-Func CacheHeroesWithRez()
-    ; Go over all heroes and find all Heroes with rez skills
-    For $i = 1 To Party_GetMyPartyInfo("ArrayHeroPartyMemberSize")
-        If HasRezSkill($i) Then
-            Redim $heroNumberWithRez[UBound($heroNumberWithRez)+1]
-            $heroNumberWithRez[UBound($heroNumberWithRez)-1] = $i
-        EndIf
-    Next
-EndFunc   ;==> CacheHeroesWithRez
-
-Func GetPartyDefeated()
-    ; Party is defeated, when you die, while Malus is at 60%
-    Return Party_GetPartyContextInfo("IsDefeated")
-EndFunc   ;==> GetPartyDefeated
-
-Func GetPartySize()
-    Local $aParty = Party_GetMyPartyInfo("ArrayPlayerPartyMemberSize")
-    Local $aHero = Party_GetMyPartyInfo("ArrayHeroPartyMemberSize")
-    Local $aHench = Party_GetMyPartyInfo("ArrayHenchmanPartyMemberSize")
-    
-    Return $aParty + $aHero + $aHench
-EndFunc   ;==> GetPartySize
 
 Func GetEffectTimeRemainingEx($aAgent = -2, $aSkillID = 0, $aInfo = "TimeRemaining")
     Return Agent_GetAgentEffectInfo($aAgent, $aSkillID, $aInfo)
@@ -1341,17 +1294,6 @@ Func UseSkillEx($aSkill, $aTgt = -2, $aTimeout = 3000)
         If GetIsDead(-2) Then Return
     Until (Not Agent_GetAgentInfo(-2, "IsCasting") And Not Agent_GetAgentInfo(-2, "Skill") And Not Skill_GetSkillbarInfo($aSkill, "Casting")) Or (TimerDiff($lDeadlock) > $aTimeout)
 EndFunc   ;==>UseSkillEx
-
-Func HasRezSkill($a_i_HeroNumber)
-    For $i = 1 To 8
-        For $ii = 1 To UBound($RezSkillIDs)
-            If Skill_GetSkillbarInfo($i, "SkillID", $a_i_HeroNumber) = $RezSkillIDs[$ii-1] Then
-                Return True
-            EndIf
-        Next
-    Next
-    Return False
-EndFunc   ;==>HasRezSkill
 #EndRegion
 
 #Region Inventory
@@ -1555,15 +1497,9 @@ Func GetGoldStorage()
     Return Item_GetInventoryInfo("GoldStorage")
 EndFunc   ;==>GetGoldStorage
 
-Func CheckArrayPscon($lModelID)
-    For $p = 0 To (UBound($Array_pscon) -1)
-        If ($lModelID == $Array_pscon[$p]) Then Return True
-    Next
-EndFunc   ;==>CheckArrayPscon
-
 Func InventoryPre()
     LogInfo("Travelling to Ascalon City (Pre-Searing)")
-    RndTravel($GC_I_MAP_ID_ASCALON_CITY_OUTPOST)
+    Map_RndTravel($GC_I_MAP_ID_ASCALON_CITY_OUTPOST)
     
     Sleep(3000)
     
@@ -1600,120 +1536,6 @@ Func InventoryPre()
     Sleep(500)
 EndFunc   ;==>InventoryPre
 
-Func Inventory()
-
-    LogInfo("Travelling to Eye of the North")
-    RndTravel($Town_ID_EyeOfTheNorth)
-
-    $inventorytrigger = 1
-
-    Sleep(1000)
-
-    LogInfo("Move to Merchant")
-    MerchantEotN()
-    Sleep(2000)
-
-    LogInfo("Identifying")
-    For $i = 1 To 4
-        Ident($i)
-    Next
-
-    LogInfo("Selling")
-    For $i = 1 To 4
-        Sell($i)
-    Next
-
-    If GetGoldCharacter() > 90000 Then
-        LogInfo("Depositing Gold")
-        Item_DepositGold()
-    EndIf
-
-    If FindRareRuneOrInsignia() <> 0 Then
-        LogInfo("Salvage all Runes")
-        For $i = 1 To 4
-            ;SalvageRunes($i)
-        Next
-        LogInfo("Second Round of Salvage")
-        For $i = 1 To 4
-            ;SalvageMods($i)
-        Next
-
-        LogInfo("Sell leftover items")
-        For $i = 1 To 4
-            Sell($i)
-        Next
-    EndIf
-
-    While FindRareRuneOrInsignia() <> 0
-        LogInfo("Move to Rune Trader")
-        RuneTraderEotN()
-        Sleep(2000)
-
-        LogInfo("Sell Runes")
-        For $i = 1 To 4
-            SellRunes($i)
-        Next
-        Sleep(2000)
-
-        If GetGoldCharacter() > 20000 Then
-            LogInfo("Buying Rare Materials")
-            RareMaterialTraderEotN()
-        EndIf
-    WEnd
-
-    If GetGoldCharacter() > 20000 And GetGoldStorage() > 900000 Then
-        LogInfo("Buying Rare Materials")
-        RareMaterialTraderEotN()
-    EndIf
-
-    Sleep(3000)
-EndFunc   ;==>Inventory
-
-Func Merchant()
-    ;~ Array with Coordinates for Merchants (you better check those for your own Guildhall)
-    Dim $Waypoints_by_Merchant[29][3] = [ _
-            [$BurningIsle, -4439, -2088], _
-            [$BurningIsle, -4772, -362], _
-            [$BurningIsle, -3637, 1088], _
-            [$BurningIsle, -2506, 988], _
-            [$DruidsIsle, -2037, 2964], _
-            [$FrozenIsle, 99, 2660], _
-            [$FrozenIsle, 71, 834], _
-            [$FrozenIsle, -299, 79], _
-            [$HuntersIsle, 5156, 7789], _
-            [$HuntersIsle, 4416, 5656], _
-            [$IsleOfTheDead, -4066, -1203], _
-            [$NomadsIsle, 5129, 4748], _
-            [$WarriorsIsle, 4159, 8540], _
-            [$WarriorsIsle, 5575, 9054], _
-            [$WizardsIsle, 4288, 8263], _
-            [$WizardsIsle, 3583, 9040], _
-            [$ImperialIsle, 1415, 12448], _
-            [$ImperialIsle, 1746, 11516], _
-            [$IsleOfJade, 8825, 3384], _
-            [$IsleOfJade, 10142, 3116], _
-            [$IsleOfMeditation, -331, 8084], _
-            [$IsleOfMeditation, -1745, 8681], _
-            [$IsleOfMeditation, -2197, 8076], _
-            [$IsleOfWeepingStone, -3095, 8535], _
-            [$IsleOfWeepingStone, -3988, 7588], _
-            [$CorruptedIsle, -4670, 5630], _
-            [$IsleOfSolitude, 2970, 1532], _
-            [$IsleOfWurms, 8284, 3578], _
-            [$UnchartedIsle, 1503, -2830]]
-    For $i = 0 To (UBound($Waypoints_by_Merchant) - 1)
-        If ($Waypoints_by_Merchant[$i][0] == True) Then
-            MoveTo($Waypoints_by_Merchant[$i][1], $Waypoints_by_Merchant[$i][2])
-        EndIf
-    Next
-
-    LogInfo("Talk to Merchant")
-    Local $guy = GetNearestNPCToAgent(-2, 1320, $GC_I_AGENT_TYPE_LIVING, 1, "NPCFilter")
-    MoveTo(Agent_GetAgentInfo($guy, "X")-20,Agent_GetAgentInfo($guy, "Y")-20)
-    Agent_GoNPC($guy)
-    Sleep(1000)
-EndFunc   ;==> Merchant
-
 Func MerchantAscalonPre()
     Local $spX = Agent_GetAgentInfo(-2, "X")
     Local $spY = Agent_GetAgentInfo(-2, "Y")
@@ -1728,127 +1550,6 @@ Func MerchantAscalonPre()
     Agent_GoNPC($guy)
     Sleep(1000)
 EndFunc   ;==> MerchantAscalonPre
-
-Func MerchantEotN()
-    ; Run to Merchant in EotN
-    LogInfo("Run to Merchant in EotN")
-    MoveTo(-2660.77, 1162.44)
-
-    LogInfo("Talk to Merchant")
-    Local $guy = GetNearestNPCToAgent(-2, 1320, $GC_I_AGENT_TYPE_LIVING, 1, "NPCFilter")
-    MoveTo(Agent_GetAgentInfo($guy, "X")-20,Agent_GetAgentInfo($guy, "Y")-20)
-    Agent_GoNPC($guy)
-    Sleep(1000)
-EndFunc   ;==> MerchantEotN
-
-Func RareMaterialTrader()
-    ;~ Array with Coordinates for Merchants (you better check those for your own Guildhall)
-    Dim $Waypoints_by_RareMatTrader[36][3] = [ _
-            [$BurningIsle, -3793, 1069], _
-            [$BurningIsle, -2798, -74], _
-            [$DruidsIsle, -989, 4493], _
-            [$FrozenIsle, 71, 834], _
-            [$FrozenIsle, 99, 2660], _
-            [$FrozenIsle, -385, 3254], _
-            [$FrozenIsle, -983, 3195], _
-            [$HuntersIsle, 3267, 6557], _
-            [$IsleOfTheDead, -3415, -1658], _
-            [$NomadsIsle, 1930, 4129], _
-            [$NomadsIsle, 462, 4094], _
-            [$WarriorsIsle, 4108, 8404], _
-            [$WarriorsIsle, 3403, 6583], _
-            [$WarriorsIsle, 3415, 5617], _
-            [$WizardsIsle, 3610, 9619], _
-            [$ImperialIsle, 244, 11719], _
-            [$IsleOfJade, 8919, 3459], _
-            [$IsleOfJade, 6789, 2781], _
-            [$IsleOfJade, 6566, 2248], _
-            [$IsleOfMeditation, -2197, 8076], _
-            [$IsleOfMeditation, -1745, 8681], _
-            [$IsleOfMeditation, -331, 8084], _
-            [$IsleOfMeditation, 422, 8769], _
-            [$IsleOfMeditation, 549, 9531], _
-            [$IsleOfWeepingStone, -3988, 7588], _
-            [$IsleOfWeepingStone, -3095, 8535], _
-            [$IsleOfWeepingStone, -2431, 7946], _
-            [$IsleOfWeepingStone, -1618, 8797], _
-            [$CorruptedIsle, -4424, 5645], _
-            [$CorruptedIsle, -4443, 4679], _
-            [$IsleOfSolitude, 3172, 3728], _
-            [$IsleOfSolitude, 3221, 4789], _
-            [$IsleOfSolitude, 3745, 4542], _
-            [$IsleOfWurms, 8353, 2995], _
-            [$IsleOfWurms, 6708, 3093], _
-            [$UnchartedIsle, 2530, -2403]]
-    For $i = 0 To (UBound($Waypoints_by_RareMatTrader) - 1)
-        If ($Waypoints_by_RareMatTrader[$i][0] == True) Then
-            MoveTo($Waypoints_by_RareMatTrader[$i][1], $Waypoints_by_RareMatTrader[$i][2])
-        EndIf
-    Next
-    LogInfo("Talk to Rare Material Trader")
-    Local $guy = GetNearestNPCToAgent(-2, 1320, $GC_I_AGENT_TYPE_LIVING, 1, "NPCFilter")
-    MoveTo(Agent_GetAgentInfo($guy, "X")-20,Agent_GetAgentInfo($guy, "Y")-20)
-    Agent_GoNPC($guy)
-    Sleep(1000)
-    ;~This section does the buying
-    While GetGoldStorage() > 900*1000 Or GetGoldCharacter() > 10*1000
-        If GetGoldCharacter() > 10*1000 Then
-            Merchant_RequestQuote(930)
-            Sleep(500)
-            Merchant_TraderBuy()
-            Sleep(500)
-        Elseif GetGoldStorage() > 900*1000 Then
-            Item_WithdrawGold()
-            Sleep(1000)
-        EndIf
-    WEnd
-EndFunc   ;==>Rare Material trader
-
-Func RareMaterialTraderEotN()
-    LogInfo("Run to Rare Material Trader in EotN")
-    MoveTo(-2216.90, 1083.70)
-
-    LogInfo("Talk to Rare Material Trader")
-    Local $guy = GetNearestNPCToAgent(-2, 1320, $GC_I_AGENT_TYPE_LIVING, 1, "NPCFilter")
-    MoveTo(Agent_GetAgentInfo($guy, "X")-20,Agent_GetAgentInfo($guy, "Y")-20)
-    Agent_GoNPC($guy)
-    Sleep(1000)
-    
-    ;~This section does the buying
-    While GetGoldStorage() > 900*1000 Or GetGoldCharacter() > 10*1000
-        If GetGoldCharacter() > 10*1000 Then
-            Merchant_BuyItem($Ectoplasm_ID, 1, True)
-            ;Merchant_RequestQuote(930)
-            ;Sleep(500)
-            ;Merchant_TraderBuy()
-            ;Sleep(500)
-        Elseif GetGoldStorage() > 900*1000 Then
-            Item_WithdrawGold()
-            Sleep(1000)
-        EndIf
-    WEnd
-EndFunc   ;==> RareMaterialTraderEotN
-
-Func RuneTrader()
-    MoveTo(1297.07,11389.97)
-    MoveTo(905.74,11655.34)
-    LogInfo("Talk to Rune Trader")
-    Local $guy = GetNearestNPCToAgent(-2, 1320, $GC_I_AGENT_TYPE_LIVING, 1, "NPCFilter")
-    MoveTo(Agent_GetAgentInfo($guy, "X")-20,Agent_GetAgentInfo($guy, "Y")-20)
-    Agent_GoNPC($guy)
-    Sleep(1000)
-EndFunc   ;==> Rune Trader
-
-Func RuneTraderEotN()
-    LogInfo("Run to Rune Trader in EotN")
-    MoveTo(-3250.18, 2011.88)
-
-    LogInfo("Talk to Rune Trader")
-    Local $guy = GetNearestNPCToAgent(-2, 1320, $GC_I_AGENT_TYPE_LIVING, 1, "NPCFilter")
-    MoveTo(Agent_GetAgentInfo($guy, "X")-20,Agent_GetAgentInfo($guy, "Y")-20)
-    Agent_GoNPC($guy)
-    Sleep(1000)
-EndFunc   ;==> RuneTraderEotN
 
 Func Ident($BagIndex)
     Local $BagPtr
@@ -1873,117 +1574,6 @@ Func Ident($BagIndex)
         Sleep(250)
     Next
 EndFunc   ;==>Ident
-
-Func IsAlreadySalvaged($aItemPtr)
-    Local $modelID
-    If Not IsPtr($aItemPtr) Then $aItemPtr = Item_GetItemPtr($aItemPtr)
-    
-    $modelID = Item_GetItemInfoByPtr($aItemPtr, "ModelID")
-    Switch $modelID
-        Case 5551	;~ Sup Vigor
-            Return True
-        Case 903	;~ minor Strength, minor Tactics
-            Return True
-        Case 904	;~ minor Expertise, minor Marksman
-            Return True
-        Case 902	;~ minor Healing, minor Prot, minor Divine
-            Return True
-        Case 900	;~ minor Soul
-            Return True
-        Case 899	;~ minor Fastcast, minor Insp
-            Return True
-        Case 901	;~ minor Energy
-            Return True
-        Case 6327	;~ minor Spawn
-            Return True
-        Case 15545	;~ minor Scythe, minor Mystic
-            Return True
-        Case 898	;~ minor Vigor, minor Vitae
-            Return True
-        Case 3612	;~ major Fastcast
-            Return True
-        Case 5550	;~ major Vigor
-            Return True
-        Case 5557	;~ superior Smite
-            Return True
-        Case 5553	;~ superior Death
-            Return True
-        Case 5549	;~ superior Dom
-            Return True
-        Case 5555	;~ superior Air
-            Return True
-        Case 6329	;~ superior Channel, superior Commu
-            Return True
-        Case 5551	;~ superior Vigor
-            Return True
-        Case 19156	;~ Sentinel insignia
-            Return True
-        Case 19139	;~ Tormentor insignia
-            Return True
-        Case 19163	;~ Winwalker insignia
-            Return True
-        Case 19129	;~ Prodigy insignia
-            Return True
-        Case 19165	;~ Shamans insignia
-            Return True
-        Case 19127	;~ Nightstalker insignia
-            Return True
-        Case 19168	;~ Centurions insignia
-            Return True
-        Case 19135	;~ Blessed insignia
-            Return True
-    EndSwitch
-
-    Return False
-EndFunc   ;==> IsAlreadySalvaged
-
-;~ Description: Starts a salvaging session of an item.
-Func StartSalvage2($aItem, $aSalvageKit = 0)
-    Local $lOffset[4] = [0, 0x18, 0x2C, 0x690]
-    Local $lSalvageSessionID = Memory_ReadPtr($g_p_BasePointer, $lOffset)
-    Local $lSalvageKit = 0
-
-    If Not IsPtr($aSalvageKit) Then
-        $lSalvageKit = Item_GetItemPtr($aSalvageKit)
-    Else
-        $lSalvageKit = $aSalvageKit
-    EndIf
-    Sleep(250)
-    If $lSalvageKit = 0 Then Return 0
-
-    DllStructSetData($g_d_Salvage, 2, Item_ItemID($aItem))
-    DllStructSetData($g_d_Salvage, 3, Item_ItemID($lSalvageKit))
-    DllStructSetData($g_d_Salvage, 4, $lSalvageSessionID[1])
-    Core_Enqueue($g_p_Salvage, 16)
-    Return 1
-EndFunc
-
-;~ Description: Identifies an item.
-Func IdentifyItem2($aItem, $aIdentKit = 0)
-    Local $lItemID = Item_ItemID($aItem)
-    Local $lIdentKit = 0
-
-    If Not IsPtr($aIdentKit) Then
-        $lIdentKit = Item_GetItemPtr($aIdentKit)
-    Else
-        $lIdentKit = $aIdentKit
-    EndIf
-    Sleep(250)
-
-    If Item_GetItemInfoByPtr($aItem, "IsIdentified") Then Return True
-    If $lIdentKit = 0 Then Return False
-
-    Core_SendPacket(0xC, $GC_I_HEADER_ITEM_IDENTIFY, Item_ItemID($lIdentKit), $lItemID)
-
-    Local $lDeadlock = TimerInit()
-    Do
-        Sleep(100)
-    Until Item_GetItemInfoByPtr($aItem, "IsIdentified") Or TimerDiff($lDeadlock) > 2500
-
-    If TimerDiff($lDeadlock) > 2500 Then Return False
-
-    Return True
-EndFunc   ;==>IdentifyItem
 
 Func FindIdentificationKit()
     Local $lItemPtr
@@ -2013,95 +1603,6 @@ Func FindIdentificationKit()
     Next
     Return $lKitPtr
 EndFunc   ;==>FindIdentificationKit
-
-Func FindCharrSalvageKit()
-    Local $lItemPtr
-    Local $lKitPtr = 0
-    For $i = 1 To 4
-        For $j = 1 To Item_GetBagInfo(Item_GetBagPtr($i), 'Slots')
-            $lItemPtr = Item_GetItemBySlot($i, $j)
-            Switch Item_GetItemInfoByPtr($lItemPtr, 'ModelID')
-                Case 18721
-                    $lKitPtr = $lItemPtr
-                Case Else
-                    ContinueLoop
-            EndSwitch
-        Next
-    Next
-    Return $lKitPtr
-EndFunc   ;==>FindCharrSalvageKit
-
-Func FindRareRuneOrInsignia()
-    Local $lItemPtr
-    For $i = 1 To 4
-        For $j = 1 To Item_GetBagInfo(Item_GetBagPtr($i), 'Slots')
-            $lItemPtr = Item_GetItemBySlot($i, $j)
-            If IsRareRunePre($lItemPtr) Or IsRareInsigniaPre($lItemPtr) Then Return True
-        Next
-    Next
-    Return False
-EndFunc	   ;==>FindRareRuneOrInsignia
-
-Func FindRareMod()
-    Local $lItemPtr
-    For $i = 1 To 4
-        For $j = 1 To Item_GetBagInfo(Item_GetBagPtr($i), 'Slots')
-            $lItemPtr = Item_GetItemBySlot($i, $j)
-
-            If IsRareMod($lItemPtr) Then Return True
-        Next
-    Next
-    Return False
-EndFunc   ;==>FindRareMod
-
-Func FindConset()
-    Local $lItemPtr
-    Local $litemID
-    Local $consetItemCounter = 0
-    For $i = 1 To 4
-        For $j = 1 To Item_GetBagInfo(Item_GetBagPtr($i), 'Slots')
-            $lItemPtr = Item_GetItemBySlot($i, $j)
-            $lItemID = Item_GetItemInfoByPtr($lItemPtr, 'ModelID')
-            For $ii = 0 to UBound($Conset) - 1
-                If $litemID = $Conset[$ii] Then
-                    $consetItemCounter += 1
-                EndIf
-            Next
-        Next
-    Next
-
-    If $consetItemCounter = 3 Then Return True
-    Return False
-EndFunc   ;==>FindConset
-
-Func UseConset()
-    Local $lItemPtr
-    Local $lItemID
-
-    For $i = 1 To 4
-        For $j = 1 To Item_GetBagInfo(Item_GetBagPtr($i), 'Slots')
-            $lItemPtr = Item_GetItemBySlot($i, $j)
-            $lItemID = Item_GetItemInfoByPtr($lItemPtr, 'ModelID')
-            For $ii = 0 to UBound($Conset) - 1
-                If $lItemID = $Conset[$ii] Then
-                    If $ii = 0 And GetEffectTimeRemainingEx(-2, $EffectEssence) = 0 Then
-                        Item_UseItem($lItemPtr)
-                        Sleep(250)
-                    ElseIf $ii = 1 And GetEffectTimeRemainingEx(-2, $EffectArmor) = 0 Then
-                        Item_UseItem($lItemPtr)
-                        Sleep(250)
-                    ElseIf $ii = 2 And GetEffectTimeRemainingEx(-2, $EffectGrail) = 0 Then
-                        Item_UseItem($lItemPtr)
-                        Sleep(250)
-                    Else
-                        ContinueLoop
-                    EndIf
-                EndIf
-            Next
-        Next
-    Next
-    Return
-EndFunc   ;==>UseConset
 
 Func FindSummoningStone()
     Local $lItemPtr
@@ -2161,11 +1662,11 @@ Func IsErrorSkill($skillID)
 EndFunc
 
 Func GetBonus()
-    Map_RndTravel(148)
+    Map_RndTravel($GC_I_MAP_ID_ASCALON_CITY_OUTPOST)
     Sleep(1000)
 
     If $CharrBossFarm = False Then
-        RemoveErrorSCSkill()
+        ;RemoveErrorSCSkill()
     EndIf
     
     Sleep(250)
@@ -2227,7 +1728,7 @@ EndFunc   ;==>QuestActive
 
 Func InQuestLog($questID)
 
-    Local $l_questArray = Quest_GetQuestArray()
+    Local $l_questArray = GetQuestArray()
     If $l_questArray = 0 Then Return False
 
     For $i = 0 To UBound($l_questArray) - 1
@@ -2239,7 +1740,7 @@ Func InQuestLog($questID)
     Return False
 EndFunc   ;==>InQuestLog
 
-Func Quest_GetQuestArray()
+Func GetQuestArray()
     Local $l_i_Size = World_GetWorldInfo("QuestLogSize")
     If $l_i_Size = 0 Then Return 0
 
@@ -2259,7 +1760,7 @@ Func Quest_GetQuestArray()
     If $l_i_Count = 0 Then Return 0
     ReDim $l_ai_QuestArray[$l_i_Count]
     Return $l_ai_QuestArray
-EndFunc   ;==>Quest_GetQuestArray
+EndFunc   ;==>GetQuestArray
 
 Func PreSell($BagIndex)
     Local $aItemPtr
@@ -2292,58 +1793,6 @@ Func Sell($BagIndex)
     Next
 EndFunc   ;==> Sell
 
-Func ScanDyes($dyeID)
-    Local $aItemPtr
-    Local $BagIndex
-    Local $BagPtr
-    Local $dyeNumber = 0
-    Local $ModelID 
-    Local $ExtraID
-
-    For $BagIndex = 1 To 4
-        $BagPtr = Item_GetBagPtr($BagIndex)
-        For $ii = 1 To Item_GetBagInfo($BagPtr, "Slots")
-            $aItemPtr = Item_GetItemBySlot($BagIndex, $ii)
-            If Item_GetItemInfoByPtr($aItemPtr, "ItemID") = 0 Then ContinueLoop
-            $ModelID = Item_GetItemInfoByPtr($aItemPtr, "ModelID")
-            $ExtraID = Item_GetItemInfoByPtr($aItemPtr, "ExtraID")
-            If $ModelID == 146 And $ExtraID == $dyeID Then
-                $dyeNumber += Item_GetItemInfoByPtr($aItemPtr, "Quantity")
-            Else
-                ContinueLoop
-            EndIf
-        Next
-    Next
-    Return $dyeNumber
-EndFunc   ;==> ScanDyes
-
-Func SellRunes($BagIndex)
-    Local $aItemPtr
-    Local $BagPtr = Item_GetBagPtr($BagIndex)
-    For $ii = 1 To Item_GetBagInfo($BagPtr, "Slots")
-        $aItemPtr = Item_GetItemBySlot($BagIndex, $ii)
-        If Item_GetItemInfoByPtr($aItemPtr, "ItemID") = 0 Then ContinueLoop
-        Local $sellable = IsSellableInsignia($aItemPtr) + IsSellableRune($aItemPtr)
-        Sleep(250)
-        If $sellable > 0 Then
-            If GetGoldCharacter() > 65000 And GetGoldStorage() <= 935000 Then
-                Item_DepositGold(65000)
-                Sleep(500)
-            ElseIf GetGoldCharacter() > 65000 And GetGoldStorage() > 935000 Then
-                ExitLoop
-            EndIf
-
-            If IsSupVigor($aItemPtr) Then
-                If GetGoldCharacter() > 20000 Then Item_DepositGold()
-                Sleep(500)
-                If GetGoldCharacter() > 20000 Then ContinueLoop
-            EndIf
-            Merchant_SellItem($aItemPtr, 1, True)
-        EndIf
-        Sleep(500)
-    Next
-EndFunc   ;==> SellRunes
-
 Func CanPreSell($aItemPtr)
     Local $lRarity = Item_GetItemInfoByPtr($aItemPtr, "Rarity")
     Local $lIsIdentified = Item_GetItemInfoByPtr($aItemPtr, "IsIdentified")
@@ -2356,6 +1805,8 @@ EndFunc   ;==> CanPreSell
 
 Func CanSell($aItem)
     Local $IsRareMod = IsRareMod($aItem)
+    Local $IsRareRunePre = IsRareRunePre($aItem)
+    Local $IsInsignia = IsRareInsigniaPre($aItem)
     Local $IsCharrRelated = IsCharrRelated($aItem)
     Local $IsDye = IsDye($aItem)
     Local $IsBlue = IsBlue($aItem)
@@ -2369,8 +1820,6 @@ Func CanSell($aItem)
     Local $IsCaster = IsPerfectCaster($aItem)
     Local $IsStaff = IsPerfectStaff($aItem)
     Local $IsShield = IsPerfectShield($aItem)
-    Local $IsRune = IsRareRunePre($aItem)
-    Local $IsInsignia = IsRareInsigniaPre($aItem)
     Local $IsReq8 = IsReq8Max($aItem)
     Local $IsReq7 = IsReq7Max($aItem)
     Local $IsTome = IsRegularTome($aItem)
@@ -2385,20 +1834,19 @@ Func CanSell($aItem)
 
     Switch $IsBlue
     Case True
-        If $IsRareMod Then Return False
+        If $IsRareMod Or $IsRareRunePre Then Return False
         Return $isBlueSell ; Is blue
     EndSwitch
 
     Switch $IsPurple
     Case True
-        If $IsRareMod Then Return False
+        If $IsRareMod Or $IsRareRunePre Then Return False
         Return $isPurpleSell ; Is purple
     EndSwitch
 
     Switch $IsGold
     Case True
-        If $IsRareMod Then Return False
-        If $IsSpecial Then Return False
+        If $IsRareMod Or $IsRareRunePre Or $IsSpecial Then Return False
         Return $isGoldSell ; Is gold
     EndSwitch
     
@@ -2455,13 +1903,13 @@ Func CanSell($aItem)
     Case True
        Return False ; Is req7 max (15armor)
     EndSwitch
- 
-    Switch $IsRune
+
+    Switch $IsInsignia
     Case True
        Return False
     EndSwitch
-
-    Switch $IsInsignia
+    
+    Switch $IsRareRunePre
     Case True
        Return False
     EndSwitch
@@ -3732,60 +3180,6 @@ Func IsRareRunePre($aItem)
     EndIf
 EndFunc   ;==> IsRareRunePre
 
-Func IsSellableRune($aItem)
-    Local $ModStruct = Item_GetModStruct($aItem)
-    Local $SupVigor = StringInStr($ModStruct, "C202EA27", 0, 1) ; Mod struct for Sup vigor rune
-    Local $minorStrength = StringInStr($ModStruct, "0111E821", 0, 1) ; minor Strength
-    Local $minorTactics = StringInStr($ModStruct, "0115E821", 0, 1) ; minor Tactics
-    Local $minorExpertise = StringInStr($ModStruct, "0117E821", 0, 1) ; minor Expertise
-    Local $minorMarksman = StringInStr($ModStruct, "0119E821", 0, 1) ; minor Marksman
-    Local $minorHealing = StringInStr($ModStruct, "010DE821", 0, 1) ; minor Healing
-    Local $minorProt = StringInStr($ModStruct, "010FE821", 0, 1) ; minor Prot
-    Local $minorDivine = StringInStr($ModStruct, "0110E821", 0, 1) ; minor Divine
-    Local $minorSoul = StringInStr($ModStruct, "0106E821", 0, 1) ; minor Soul
-    Local $minorFastcast = StringInStr($ModStruct, "0100E821", 0, 1) ; minor Fastcast
-    Local $minorInsp = StringInStr($ModStruct, "0103E821", 0, 1) ; minor Insp
-    Local $minorEnergy = StringInStr($ModStruct, "010CE821", 0, 1) ; minor Energy
-    Local $minorSpawn = StringInStr($ModStruct, "0124E821", 0, 1) ; minor Spawn
-    Local $minorScythe = StringInStr($ModStruct, "0129E821", 0, 1) ; minor Scythe
-    Local $minorMystic = StringInStr($ModStruct, "012CE821", 0, 1) ; minor Mystic
-    Local $minorVigor = StringInStr($ModStruct, "C202E827", 0, 1) ; minor Vigor
-    Local $minorVitae = StringInStr($ModStruct, "12020824", 0, 1) ; minor Vitae
-
-    Local $majorFast = StringInStr($ModStruct, "0200E821", 0, 1) ; major Fastcast
-    Local $majorVigor = StringInStr($ModStruct, "C202E927", 0, 1) ; major Vigor
-
-    Local $supSmite = StringInStr($ModStruct, "030EE821", 0, 1) ; superior Smite
-    Local $supDeath = StringInStr($ModStruct, "0305E821", 0, 1) ; superior Death
-    Local $supDom = StringInStr($ModStruct, "0302E821", 0, 1) ; superior Dom
-    Local $supAir = StringInStr($ModStruct, "0308E821", 0, 1) ; superior Air
-    Local $supChannel = StringInStr($ModStruct, "0322E821", 0, 1) ; superior Channel
-    Local $supCommu = StringInStr($ModStruct, "0320E821", 0, 1) ; superior Commu
-
-    If $minorStrength > 0 Or $minorTactics > 0 Or $minorExpertise > 0 Or $minorMarksman > 0 Or $minorHealing > 0 Or $minorProt > 0 Or $minorDivine > 0 Then 
-        Return True
-     ElseIf $minorSoul > 0 Or $minorFastcast > 0 Or $minorInsp > 0 Or $minorEnergy > 0 Or $minorSpawn > 0 Or $minorScythe > 0 Or $minorMystic > 0 Then
-         Return True
-     ElseIf $minorVigor > 0 Or $minorVitae > 0 Or $majorFast > 0 Or $majorVigor > 0 Or $supSmite > 0 Or $supDeath > 0 Or $supDom > 0 Then
-         Return True
-    ElseIf $supAir > 0 Or $supChannel > 0 Or $supCommu > 0 Or $SupVigor > 0 Then
-        Return True
-    Else
-       Return False
-    EndIf
-EndFunc   ;==> IsSellableRune
-
-Func IsSupVigor($aItem)
-    Local $ModStruct = Item_GetModStruct($aItem)
-    Local $SupVigor = StringInStr($ModStruct, "C202EA27", 0, 1) ; Mod struct for Sup vigor rune
-
-    If $SupVigor > 0 Then
-       Return True
-    Else
-       Return False
-    EndIf
-EndFunc   ;==> IsSupVigor
-
 Func IsRareInsigniaPre($aItem)
     Local $ModStruct = Item_GetModStruct($aItem)
     Local $Sentinel = StringInStr($ModStruct, "FB010824", 0, 1) ; Sentinel insig
@@ -4125,207 +3519,16 @@ Func IsMaxDagger($aItem)
         Return False
     EndIf
 EndFunc   ;==> IsMaxDagger
-
-#EndRegion
-
-#Region Checking Guild Hall
-;~ Checks to see which Guild Hall you are in and the spawn point
-Func CheckGuildHall()
-    If Map_GetMapID() == $GH_ID_Warriors_Isle Then
-        $WarriorsIsle = True
-        LogInfo("Warrior's Isle")
-    EndIf
-    If Map_GetMapID() == $GH_ID_Hunters_Isle Then
-        $HuntersIsle = True
-        LogInfo("Hunter's Isle")
-    EndIf
-    If Map_GetMapID() == $GH_ID_Wizards_Isle Then
-        $WizardsIsle = True
-        LogInfo("Wizard's Isle")
-    EndIf
-    If Map_GetMapID() == $GH_ID_Burning_Isle Then
-        $BurningIsle = True
-        LogInfo("Burning Isle")
-    EndIf
-    If Map_GetMapID() == $GH_ID_Frozen_Isle Then
-        $FrozenIsle = True
-        LogInfo("Frozen Isle")
-    EndIf
-    If Map_GetMapID() == $GH_ID_Nomads_Isle Then
-        $NomadsIsle = True
-        LogInfo("Nomad's Isle")
-    EndIf
-    If Map_GetMapID() == $GH_ID_Druids_Isle Then
-        $DruidsIsle = True
-        LogInfo("Druid's Isle")
-    EndIf
-    If Map_GetMapID() == $GH_ID_Isle_Of_The_Dead Then
-        $IsleOfTheDead = True
-        LogInfo("Isle of the Dead")
-    EndIf
-    If Map_GetMapID() == $GH_ID_Isle_Of_Weeping_Stone Then
-        $IsleOfWeepingStone = True
-        LogInfo("Isle of Weeping Stone")
-    EndIf
-    If Map_GetMapID() == $GH_ID_Isle_Of_Jade Then
-        $IsleOfJade = True
-        LogInfo("Isle of Jade")
-    EndIf
-    If Map_GetMapID() == $GH_ID_Imperial_Isle Then
-        $ImperialIsle = True
-        LogInfo("Imperial Isle")
-    EndIf
-    If Map_GetMapID() == $GH_ID_Isle_Of_Meditation Then
-        $IsleOfMeditation = True
-        LogInfo("Isle of Meditation")
-    EndIf
-    If Map_GetMapID() == $GH_ID_Uncharted_Isle Then
-        $UnchartedIsle = True
-        LogInfo("Uncharted Isle")
-    EndIf
-    If Map_GetMapID() == $GH_ID_Isle_Of_Wurms Then
-        $IsleOfWurms = True
-        LogInfo("Isle of Wurms")
-        If $IsleOfWurms = True Then
-            CheckIsleOfWurms()
-        EndIf
-    EndIf
-    If Map_GetMapID() == $GH_ID_Corrupted_Isle Then
-        $CorruptedIsle = True
-        LogInfo("Corrupted Isle")
-        If $CorruptedIsle = True Then
-            CheckCorruptedIsle()
-        EndIf
-    EndIf
-    If Map_GetMapID() == $GH_ID_Isle_Of_Solitude Then
-        $IsleOfSolitude = True
-        LogInfo("Isle of Solitude")
-    EndIf
-EndFunc   ;~ Check Guild halls
-
-#Region Luxon and Kurzick Points
-Func GetKurzickFaction()
-    Local $currentKurzFaction = World_GetWorldInfo("CurrentKurzick")
-    Return $currentKurzFaction
-EndFunc   ;==> GetKurzickPoints
-
-Func GetMaxKurzickFaction()
-    Local $maxKurzFaction = World_GetWorldInfo("MaxKurzickPoints")
-    Return $maxKurzFaction
-EndFunc   ;==> GetMaxKurzickPoints
-
-Func GetKurzickTitlePoints()
-    Local $currentKurzPoints = Title_GetTitleInfo($GC_E_TITLEID_KURZICK, "CurrentPoints")
-    Return $currentKurzPoints
-EndFunc   ;==> GetKurzickTitlePoints
-
-Func GetKurzickTitle()
-    Local $currentKurzPoints = Title_GetTitleInfo($GC_E_TITLEID_KURZICK, "CurrentPoints")
-
-    If $currentKurzPoints < 100000 Then
-        Return 0
-    ElseIf $currentKurzPoints < 250000 Then
-        Return 1
-    ElseIf $currentKurzPoints < 400000 Then
-        Return 2
-    ElseIf $currentKurzPoints < 550000 Then
-        Return 3
-    ElseIf $currentKurzPoints < 875000 Then
-        Return 4
-    ElseIf $currentKurzPoints < 1200000 Then
-        Return 5
-    ElseIf $currentKurzPoints < 1850000 Then
-        Return 6
-    ElseIf $currentKurzPoints < 2500000 Then
-        Return 7
-    ElseIf $currentKurzPoints < 3750000 Then
-        Return 8
-    ElseIf $currentKurzPoints < 5000000 Then
-        Return 9
-    ElseIf $currentKurzPoints < 7500000 Then
-        Return 10
-    ElseIf $currentKurzPoints < 10000000 Then
-        Return 11
-    Else
-        Return 12
-    EndIf
-EndFunc   ;==> GetKurzickTitle
-
-Func GetLuxonFaction()
-    Local $currentLuxFaction = World_GetWorldInfo("CurrentLuxon")
-    Return $currentLuxFaction
-EndFunc   ;==> GetLuxonPoints
-
-Func GetMaxLuxonFaction()
-    Local $maxLuxFaction = World_GetWorldInfo("MaxLuxonPoints")
-    Return $maxLuxFaction
-EndFunc   ;==> GetMaxLuxonPoints
-
-Func GetLuxonTitlePoints()
-    Local $currentLuxonPoints = Title_GetTitleInfo($GC_E_TITLEID_LUXON, "CurrentPoints")
-    Return $currentLuxonPoints
-EndFunc   ;==> GetLuxonTitlePoints
-
-Func GetLuxonTitle()
-    Local $currentLuxonPoints = Title_GetTitleInfo($GC_E_TITLEID_LUXON, "CurrentPoints")
-
-    If $currentLuxonPoints < 100000 Then
-        Return 0
-    ElseIf $currentLuxonPoints < 250000 Then
-        Return 1
-    ElseIf $currentLuxonPoints < 400000 Then
-        Return 2
-    ElseIf $currentLuxonPoints < 550000 Then
-        Return 3
-    ElseIf $currentLuxonPoints < 875000 Then
-        Return 4
-    ElseIf $currentLuxonPoints < 1200000 Then
-        Return 5
-    ElseIf $currentLuxonPoints < 1850000 Then
-        Return 6
-    ElseIf $currentLuxonPoints < 2500000 Then
-        Return 7
-    ElseIf $currentLuxonPoints < 3750000 Then
-        Return 8
-    ElseIf $currentLuxonPoints < 5000000 Then
-        Return 9
-    ElseIf $currentLuxonPoints < 7500000 Then
-        Return 10
-    ElseIf $currentLuxonPoints < 10000000 Then
-        Return 11
-    Else
-        Return 12
-    EndIf
-EndFunc   ;==> GetLuxonTitle
 #EndRegion
 
 #Region Constants
+
 ; ==== Constants ====
 Global Enum $DIFFICULTY_NORMAL, $DIFFICULTY_HARD
 Global Enum $INSTANCETYPE_OUTPOST, $INSTANCETYPE_EXPLORABLE, $INSTANCETYPE_LOADING
 Global Enum $RANGE_ADJACENT=156, $RANGE_NEARBY=240, $RANGE_AREA=312, $RANGE_EARSHOT=1000, $RANGE_SPELLCAST = 1085, $RANGE_SPIRIT = 2500, $RANGE_COMPASS = 5000
 Global Enum $RANGE_ADJACENT_2=156^2, $RANGE_NEARBY_2=240^2, $RANGE_AREA_2=312^2, $RANGE_EARSHOT_2=1000^2, $RANGE_SPELLCAST_2=1085^2, $RANGE_SPIRIT_2=2500^2, $RANGE_COMPASS_2=5000^2
 Global Enum $PROF_NONE, $PROF_WARRIOR, $PROF_RANGER, $PROF_MONK, $PROF_NECROMANCER, $PROF_MESMER, $PROF_ELEMENTALIST, $PROF_ASSASSIN, $PROF_RITUALIST, $PROF_PARAGON, $PROF_DERVISH
-
-;~ Rez Skills
-Global $RezSkillIDs[15]
-$RezSkillIDs[0] = 2 ; Resurrection Signet
-$RezSkillIDs[1] = 268 ; Unyielding Aura
-$RezSkillIDs[2] = 304 ; Light of Dwayna
-$RezSkillIDs[3] = 305 ; Resurrect
-$RezSkillIDs[4] = 306 ; Rebirth
-$RezSkillIDs[5] = 314 ; Restore Life
-$RezSkillIDs[6] = 315 ; Vengeance
-$RezSkillIDs[7] = 791 ; Flesh of my Flesh
-$RezSkillIDs[8] = 963 ; Restoration
-$RezSkillIDs[9] = 1128 ; Resurrection Chant
-$RezSkillIDs[10] = 1222 ; Lively Was Naomei
-$RezSkillIDs[11] = 1263 ; Renew Life
-$RezSkillIDs[12] = 1481 ; Death Pact Signet
-$RezSkillIDs[13] = 1592 ; "We Shall Return"
-$RezSkillIDs[14] = 1778 ; Signet of Return
-
-Global $heroNumberWithRez[0]
 
 ;~ Summoning Stones
 Global $SummoningStone[20]
@@ -4349,16 +3552,6 @@ $SummoningStone[16] = 30962	; Arctic
 $SummoningStone[17] = 31022	; Mischievous
 $SummoningStone[18] = 31023	; Frosty
 $SummoningStone[19] = 30847	; Igneous
-
-;~ Conset
-Global $Conset[3]
-$Conset[0] = 24859	; Essence of Celerity
-$Conset[1] = 24860	; Armor of Salvation
-$Conset[2] = 24861	; Grail fo Might
-
-Global Const $EffectEssence = 2522
-Global Const $EffectArmor = 2520
-Global Const $EffectGrail = 2521
 
 ;~ Pcons
 Global $Pcon[19]
@@ -4450,9 +3643,6 @@ Global $DPRemoval_Sweets[6] = [6370, 21488, 21489, 22191, 26784, 28433]
 ;~ Special Drops
 Global $Special_Drops[7] = [5656, 18345, 21491, 37765, 21833, 28433, 28434]
 
-;~ Stupid Drops that I am not using, but in here in case you want these to add these to the CanPickUp and collect in your chest
-Global $Map_Piece_Array[4] = [24629, 24630, 24631, 24632]
-
 ;~ Stackable Trophies
 Global $Stackable_Trophies_Array[1] = [27047]
 Global Const $ITEM_ID_Glacial_Stones = 27047
@@ -4482,45 +3672,6 @@ Global $Array_Store_ModelIDs460[147] = [474, 476, 486, 522, 525, 811, 819, 822, 
         , 21489, 22191, 35127, 26784, 28433, 18345, 21491, 28434, 35121, 921, 922, 923, 925, 926, 927, 928, 929, 930, 931, 932, 933, 934, 935, 936, 937, 938, 939, 940, 941, 942, 943 _
         , 944, 945, 946, 948, 949, 950, 951, 952, 953, 954, 955, 956, 6532, 6533]
 
-;~ Prophecies
-Global $GH_ID_Warriors_Isle = 4
-Global $GH_ID_Hunters_Isle = 5
-Global $GH_ID_Wizards_Isle = 6
-Global $GH_ID_Burning_Isle = 52
-Global $GH_ID_Frozen_Isle = 176
-Global $GH_ID_Nomads_Isle = 177
-Global $GH_ID_Druids_Isle = 178
-Global $GH_ID_Isle_Of_The_Dead = 179
-
-;~ Factions
-Global $GH_ID_Isle_Of_Weeping_Stone = 275
-Global $GH_ID_Isle_Of_Jade = 276
-Global $GH_ID_Imperial_Isle = 359
-Global $GH_ID_Isle_Of_Meditation = 360
-
-;~ Nightfall
-Global $GH_ID_Uncharted_Isle = 529
-Global $GH_ID_Isle_Of_Wurms = 530
-Global $GH_ID_Corrupted_Isle = 537
-Global $GH_ID_Isle_Of_Solitude = 538
-
-Global $WarriorsIsle = False
-Global $HuntersIsle = False
-Global $WizardsIsle = False
-Global $BurningIsle = False
-Global $FrozenIsle = False
-Global $NomadsIsle = False
-Global $DruidsIsle = False
-Global $IsleOfTheDead = False
-Global $IsleOfWeepingStone = False
-Global $IsleOfJade = False
-Global $ImperialIsle = False
-Global $IsleOfMeditation = False
-Global $UnchartedIsle = False
-Global $IsleOfWurms = False
-Global $CorruptedIsle = False
-Global $IsleOfSolitude = False
-
 ;~ Identification and Salvaging Stuff
 Global Const $SupIDKit = 5899
 Global Const $ExpertSalvKit = 2991
@@ -4528,21 +3679,10 @@ Global Const $Ectoplasm_ID = 930
 Global Const $CharrSalvKit = 18721
 Global Const $NormalIDKit = 2989
 
-;~ Outpost - Map
-Global Const $Town_ID_EyeOfTheNorth = 642
-
-;~ Inventory
-Global $inventorytrigger = 0
-
 ;~ Coordinates
 Global $coords[2]
 Global $X
 Global $Y
-
-;~ Enemy Model IDs
-Global Const $MantisMender = 3714
-Global Const $WardenSummer = 3737
-Global Const $WardenSeason = 3738
 
 ;~ Timer -> For when killing takes too long or enemies are stuck
 Global $TimerToKill = 0
